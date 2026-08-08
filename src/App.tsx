@@ -10,6 +10,7 @@ import { ExploreScreen } from './screens/ExploreScreen';
 import { SameDayScreen } from './screens/SameDayScreen';
 import { HistoricalExplorerScreen } from './screens/HistoricalExplorerScreen';
 import { MonthlyAnalysisScreen } from './screens/MonthlyAnalysisScreen';
+import { SeasonalAnalysisScreen } from './screens/SeasonalAnalysisScreen';
 import { AnnualAnalysisScreen } from './screens/AnnualAnalysisScreen';
 import { RecordsScreen } from './screens/RecordsScreen';
 import { CompareScreen } from './screens/CompareScreen';
@@ -54,6 +55,8 @@ function AppContent() {
         return <HistoricalExplorerScreen onBack={() => setActiveScreen('explore')} />;
       case 'monthly':
         return <MonthlyAnalysisScreen onBack={() => setActiveScreen('explore')} />;
+      case 'seasonal':
+        return <SeasonalAnalysisScreen onBack={() => setActiveScreen('explore')} />;
       case 'annual':
         return <AnnualAnalysisScreen onBack={() => setActiveScreen('explore')} />;
       case 'records':

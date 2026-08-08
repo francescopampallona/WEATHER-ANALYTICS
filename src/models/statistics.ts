@@ -43,6 +43,26 @@ export interface MonthlySummaryData {
   tempMaxAbsDate?: string;
 }
 
+export type SeasonId = 'winter' | 'spring' | 'summer' | 'autumn';
+
+export interface SeasonalSummaryData {
+  /** Ending year for winter; calendar year for all other seasons. */
+  year: number;
+  season: SeasonId;
+  seasonName: string;
+  /** Winter is rendered as e.g. 2023/24; other seasons as a single year. */
+  periodLabel: string;
+  tempMean: number | null;
+  tempMinMean: number | null;
+  tempMaxMean: number | null;
+  tempMinAbs: number | null;
+  tempMinAbsDate?: string;
+  precipTotal: number | null;
+  rainyDaysCount: number;
+  observedDays: number;
+  isComplete: boolean;
+}
+
 export interface AnnualSummaryData {
   year: number;
   tempMean: number | null;

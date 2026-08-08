@@ -3,6 +3,7 @@ import {
   Calendar,
   Layers,
   BarChart3,
+  CloudSun,
   Sun,
   Trophy,
   TrendingUp,
@@ -36,6 +37,13 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ onNavigate }) => {
       title: 'Monthly Analysis',
       subtitle: 'Track month-by-month averages, rainfall totals & peak max temps',
       icon: <BarChart3 className="w-5 h-5 text-indigo-500" />,
+    },
+    {
+      id: 'seasonal',
+      title: 'Seasonal Comparison',
+      subtitle: 'Compare mean and minimum temperatures for the same season across years',
+      icon: <CloudSun className="w-5 h-5 text-sky-500" />,
+      badge: 'New',
     },
     {
       id: 'annual',

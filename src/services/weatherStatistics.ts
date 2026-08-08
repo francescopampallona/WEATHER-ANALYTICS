@@ -3,6 +3,8 @@ import {
   SameDayYearData,
   StatisticalSummary,
   MonthlySummaryData,
+  SeasonalSummaryData,
+  SeasonId,
   AnnualSummaryData,
   ClimateTrendData,
   AnomalyData,
@@ -211,6 +213,111 @@ export function processMonthlyAnalysis(
   });
 
   return result;
+}
+
+const SEASON_METADATA: Record<SeasonId, { name: string; months: number[] }> = {
+  winter: { name: 'Winter', months: [12, 1, 2] },
+  spring: { name: 'Spring', months: [3, 4, 5] },
+  summer: { name: 'Summer', months: [6, 7, 8] },
+  autumn: { name: 'Autumn', months: [9, 10, 11] },
+};
+
+function getSeasonYear(record: DailyWeatherRecord, season: SeasonId): number {
+  // A winter is identified by the year in which it ends:
+  // December 2023 + January/February 2024 => winter 2023/24 (year 2024).
+  if (season === 'winter' && record.month === 12) return record.year + 1;
+  return record.year;
+}
+
+function getSeasonBounds(season: SeasonId, year: number): { start: string; end: string; days: number } {
+  switch (season) {
+    case 'winter': {
+      const februaryDays = isLeapYear(year) ? 29 : 28;
+      return {
+        start: `${year - 1}-12-01`,
+        end: `${year}-02-${februaryDays}`,
+        days: 31 + 31 + februaryDays,
+      };
+    }
+    case 'spring':
+      return { start: `${year}-03-01`, end: `${year}-05-31`, days: 92 };
+    case 'summer':
+      return { start: `${year}-06-01`, end: `${year}-08-31`, days: 92 };
+    case 'autumn':
+      return { start: `${year}-09-01`, end: `${year}-11-30`, days: 91 };
+  }
+}
+
+function getSeasonPeriodLabel(season: SeasonId, year: number): string {
+  if (season !== 'winter') return String(year);
+  return `${year - 1}/${String(year).slice(-2)}`;
+}
+
+/**
+ * Groups daily records into meteorological seasons and calculates comparable
+ * temperature and precipitation summaries. Incomplete seasons are excluded by
+ * default so a partial current season is not compared with complete past ones.
+ */
+export function processSeasonalAnalysis(
+  records: DailyWeatherRecord[],
+  season: SeasonId,
+  includeIncomplete: boolean = false
+): SeasonalSummaryData[] {
+  const metadata = SEASON_METADATA[season];
+  const yearMap = new Map<number, DailyWeatherRecord[]>();
+
+  records.forEach((record) => {
+    if (!metadata.months.includes(record.month)) return;
+    const seasonYear = getSeasonYear(record, season);
+    if (!yearMap.has(seasonYear)) yearMap.set(seasonYear, []);
+    yearMap.get(seasonYear)!.push(record);
+  });
+
+  return Array.from(yearMap.entries())
+    .sort(([yearA], [yearB]) => yearA - yearB)
+    .flatMap(([year, seasonRecords]) => {
+      const bounds = getSeasonBounds(season, year);
+      const uniqueDates = new Set(seasonRecords.map((record) => record.date));
+      const isComplete =
+        uniqueDates.size >= bounds.days && uniqueDates.has(bounds.start) && uniqueDates.has(bounds.end);
+
+      if (!includeIncomplete && !isComplete) return [];
+
+      const tempMeans = seasonRecords.map((record) => record.tempMean);
+      const tempMins = seasonRecords.map((record) => record.tempMin);
+      const tempMaxs = seasonRecords.map((record) => record.tempMax);
+      const validPrecip = seasonRecords
+        .map((record) => record.precipitation)
+        .filter((value): value is number => value !== null && value !== undefined);
+
+      let tempMinAbs: number | null = null;
+      let tempMinAbsDate: string | undefined;
+      seasonRecords.forEach((record) => {
+        if (record.tempMin !== null && (tempMinAbs === null || record.tempMin < tempMinAbs)) {
+          tempMinAbs = record.tempMin;
+          tempMinAbsDate = record.date;
+        }
+      });
+
+      return [
+        {
+          year,
+          season,
+          seasonName: metadata.name,
+          periodLabel: getSeasonPeriodLabel(season, year),
+          tempMean: mean(tempMeans),
+          tempMinMean: mean(tempMins),
+          tempMaxMean: mean(tempMaxs),
+          tempMinAbs,
+          tempMinAbsDate,
+          precipTotal:
+            validPrecip.length > 0 ? validPrecip.reduce((total, value) => total + value, 0) : null,
+          rainyDaysCount: validPrecip.filter((value) => value >= 0.1).length,
+          observedDays: uniqueDates.size,
+          isComplete,
+        },
+      ];
+    });
 }
 
 /**
