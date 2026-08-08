@@ -1,0 +1,6 @@
+{
+  "name": "Weather Analytics & Climate Explorer",
+  "description": "Android weather analytics and climate explorer application powered by real Open-Meteo current and historical weather data.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

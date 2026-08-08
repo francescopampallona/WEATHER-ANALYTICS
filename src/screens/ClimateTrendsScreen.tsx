@@ -1,0 +1,165 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, TrendingUp, RefreshCw } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { getHistoricalWeather } from '../services/weatherApi';
+import { processClimateTrends } from '../services/weatherStatistics';
+import { HistoricalDataResult } from '../models/weather';
+import { ActiveMetric } from '../models/statistics';
+import { getCurrentYear } from '../utils/dates';
+import { getMetricUnitLabel } from '../utils/units';
+import { MetricCard } from '../components/MetricCard';
+import { MetricSelector } from '../components/MetricSelector';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
+import { TrendChart } from '../charts/TrendChart';
+
+interface ClimateTrendsScreenProps {
+  onBack: () => void;
+}
+
+export const ClimateTrendsScreen: React.FC<ClimateTrendsScreenProps> = ({ onBack }) => {
+  const { location, settings } = useApp();
+  const currentYear = getCurrentYear();
+
+  const [startYear, setStartYear] = useState<number>(1950);
+  const [endYear, setEndYear] = useState<number>(currentYear);
+  const [activeMetric, setActiveMetric] = useState<ActiveMetric>('tempMean');
+
+  const [rawHistory, setRawHistory] = useState<HistoricalDataResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async (forceRefresh: boolean = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const startStr = `${startYear}-01-01`;
+      const endStr = `${endYear}-12-31`;
+
+      const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
+      setRawHistory(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch long-term climate data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(false);
+  }, [location, startYear, endYear]);
+
+  const trendsResult = useMemo(() => {
+    if (!rawHistory) return null;
+    return processClimateTrends(rawHistory.records, activeMetric);
+  }, [rawHistory, activeMetric]);
+
+  const unitLabel = getMetricUnitLabel(
+    activeMetric,
+    settings.tempUnit,
+    settings.windUnit,
+    settings.precipUnit
+  );
+
+  return (
+    <div className="flex-1 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={onBack}
+            className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Climate Trends</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Moving averages & linear regression trends for {location.name}</p>
+          </div>
+        </div>
+        <button
+          onClick={() => fetchData(true)}
+          title="Refresh Open-Meteo Data"
+          className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2 shadow-xs">
+        <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <TrendingUp className="w-4 h-4 text-cyan-500" />
+          <span>Long-Term Period Selection</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label className="block text-[10px] text-slate-400 font-medium mb-1">Start Year</label>
+            <select
+              value={startYear}
+              onChange={(e) => setStartYear(parseInt(e.target.value, 10))}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-white font-medium"
+            >
+              {Array.from({ length: currentYear - 1940 + 1 }, (_, i) => 1940 + i).map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-slate-400 font-medium mb-1">End Year</label>
+            <select
+              value={endYear}
+              onChange={(e) => setEndYear(parseInt(e.target.value, 10))}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-white font-medium"
+            >
+              {Array.from({ length: currentYear - startYear + 1 }, (_, i) => startYear + i).map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <LoadingState message={`Calculating 5 & 10-year moving averages (${startYear}–${endYear})...`} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={() => fetchData(true)} />
+      ) : trendsResult ? (
+        <div className="space-y-4">
+          <MetricSelector activeMetric={activeMetric} onChange={setActiveMetric} showWind={false} />
+
+          <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+            <TrendChart data={trendsResult.trends} unitLabel={unitLabel} height={280} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <MetricCard
+              title="Observed Trend"
+              value={
+                trendsResult.trendPerDecadeVal !== null
+                  ? `${trendsResult.trendPerDecadeVal > 0 ? '+' : ''}${trendsResult.trendPerDecadeVal.toFixed(2)}`
+                  : 'N/A'
+              }
+              subtext={`${unitLabel} per decade`}
+              badgeColor="amber"
+            />
+            <MetricCard
+              title="Linear Slope"
+              value={
+                trendsResult.linearSlope !== null
+                  ? `${trendsResult.linearSlope > 0 ? '+' : ''}${trendsResult.linearSlope.toFixed(3)}`
+                  : 'N/A'
+              }
+              subtext={`${unitLabel} / year`}
+              badgeColor="purple"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
