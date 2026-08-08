@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { getHistoricalWeather } from '../services/weatherApi';
 import { processWeatherRecords } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
-import { getCurrentYear } from '../utils/dates';
+import { getCurrentYear, getMaxHistoricalDate } from '../utils/dates';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 
@@ -24,7 +24,7 @@ export const RecordsScreen: React.FC = () => {
     setError(null);
     try {
       const startStr = `${startYear}-01-01`;
-      const endStr = `${endYear}-12-31`;
+      const endStr = endYear === currentYear ? getMaxHistoricalDate() : `${endYear}-12-31`;
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
