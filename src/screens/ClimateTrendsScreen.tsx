@@ -5,7 +5,7 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { processClimateTrends } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { ActiveMetric } from '../models/statistics';
-import { getCurrentYear } from '../utils/dates';
+import { getCurrentYear, getMaxHistoricalDate } from '../utils/dates';
 import { getMetricUnitLabel } from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { MetricSelector } from '../components/MetricSelector';
@@ -34,7 +34,7 @@ export const ClimateTrendsScreen: React.FC<ClimateTrendsScreenProps> = ({ onBack
     setError(null);
     try {
       const startStr = `${startYear}-01-01`;
-      const endStr = `${endYear}-12-31`;
+      const endStr = endYear === currentYear ? getMaxHistoricalDate() : `${endYear}-12-31`;
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
