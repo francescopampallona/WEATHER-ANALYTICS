@@ -6,7 +6,7 @@ import { processClimateTrends } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { ActiveMetric } from '../models/statistics';
 import { getCurrentYear, getMaxHistoricalDate } from '../utils/dates';
-import { getMetricUnitLabel } from '../utils/units';
+import { convertMetricDelta, convertMetricValue, getMetricUnitLabel } from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { MetricSelector } from '../components/MetricSelector';
 import { LoadingState } from '../components/LoadingState';
@@ -60,6 +60,19 @@ export const ClimateTrendsScreen: React.FC<ClimateTrendsScreenProps> = ({ onBack
     settings.windUnit,
     settings.precipUnit
   );
+  const displayedTrend = convertMetricDelta(
+    trendsResult?.trendPerDecadeVal,
+    activeMetric,
+    settings
+  );
+  const displayedSlope = convertMetricDelta(trendsResult?.linearSlope, activeMetric, settings);
+  const seriesLabel: Record<ActiveMetric, string> = {
+    tempMean: 'Annual Mean',
+    tempMin: 'Annual Avg Min',
+    tempMax: 'Annual Avg Max',
+    precipitation: 'Annual Total',
+    windSpeedMax: 'Annual Max Wind',
+  };
 
   return (
     <div className="flex-1 space-y-6">
@@ -133,15 +146,21 @@ export const ClimateTrendsScreen: React.FC<ClimateTrendsScreenProps> = ({ onBack
           <MetricSelector activeMetric={activeMetric} onChange={setActiveMetric} showWind={false} />
 
           <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-            <TrendChart data={trendsResult.trends} unitLabel={unitLabel} height={280} />
+            <TrendChart
+              data={trendsResult.trends}
+              unitLabel={unitLabel}
+              height={280}
+              valueConverter={(value) => convertMetricValue(value, activeMetric, settings)}
+              seriesLabel={seriesLabel[activeMetric]}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
             <MetricCard
               title="Observed Trend"
               value={
-                trendsResult.trendPerDecadeVal !== null
-                  ? `${trendsResult.trendPerDecadeVal > 0 ? '+' : ''}${trendsResult.trendPerDecadeVal.toFixed(2)}`
+                displayedTrend !== null
+                  ? `${displayedTrend > 0 ? '+' : ''}${displayedTrend.toFixed(2)}`
                   : 'N/A'
               }
               subtext={`${unitLabel} per decade`}
@@ -150,8 +169,8 @@ export const ClimateTrendsScreen: React.FC<ClimateTrendsScreenProps> = ({ onBack
             <MetricCard
               title="Linear Slope"
               value={
-                trendsResult.linearSlope !== null
-                  ? `${trendsResult.linearSlope > 0 ? '+' : ''}${trendsResult.linearSlope.toFixed(3)}`
+                displayedSlope !== null
+                  ? `${displayedSlope > 0 ? '+' : ''}${displayedSlope.toFixed(3)}`
                   : 'N/A'
               }
               subtext={`${unitLabel} / year`}

@@ -16,7 +16,7 @@ import { processSeasonalAnalysis } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { SeasonId, SeasonalSummaryData } from '../models/statistics';
 import { getCurrentYear, getMaxHistoricalDate, isLeapYear } from '../utils/dates';
-import { formatPrecip, formatTemp } from '../utils/units';
+import { convertTemp, formatPrecip, formatTemp } from '../utils/units';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { WeatherLineChart } from '../charts/WeatherLineChart';
@@ -299,6 +299,7 @@ export const SeasonalAnalysisScreen: React.FC<SeasonalAnalysisScreenProps> = ({ 
                 lineName="Season Mean"
                 showTrendline={false}
                 height={300}
+                valueConverter={(value) => convertTemp(value, settings.tempUnit)}
               />
             </div>
           ) : (

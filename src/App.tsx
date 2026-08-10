@@ -36,6 +36,11 @@ function AppContent() {
 
   const handleNavigate = (viewId: string) => {
     setActiveScreen(viewId);
+    if (viewId === 'home' || viewId === 'explore' || viewId === 'compare' || viewId === 'records' || viewId === 'settings') {
+      setActiveTab(viewId);
+    } else {
+      setActiveTab('explore');
+    }
   };
 
   const renderScreen = () => {

@@ -65,10 +65,40 @@ class CacheService {
     };
     this.memoryCache.set(key, entry);
 
+    const serializedEntry = JSON.stringify(entry);
     try {
-      localStorage.setItem(key, JSON.stringify(entry));
-    } catch (e) {
-      console.warn('LocalStorage write error (quota exceeded?):', e);
+      localStorage.setItem(key, serializedEntry);
+    } catch (initialError) {
+      // Historical ranges can be large. Evict the oldest cached responses and
+      // retry, while retaining the new response in memory if storage is full.
+      try {
+        const candidates: Array<{ key: string; timestamp: number }> = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const candidateKey = localStorage.key(i);
+          if (!candidateKey || candidateKey === key || !candidateKey.startsWith(CACHE_PREFIX)) continue;
+          try {
+            const raw = localStorage.getItem(candidateKey);
+            const timestamp = raw ? JSON.parse(raw)?.timestamp ?? 0 : 0;
+            candidates.push({ key: candidateKey, timestamp });
+          } catch {
+            candidates.push({ key: candidateKey, timestamp: 0 });
+          }
+        }
+
+        candidates.sort((a, b) => a.timestamp - b.timestamp);
+        for (const candidate of candidates) {
+          localStorage.removeItem(candidate.key);
+          try {
+            localStorage.setItem(key, serializedEntry);
+            return;
+          } catch {
+            // Continue evicting until enough space is available.
+          }
+        }
+      } catch {
+        // Memory cache remains available even when persistent storage fails.
+      }
+      console.warn('LocalStorage cache is full; response retained in memory only.', initialError);
     }
   }
 

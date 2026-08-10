@@ -21,6 +21,7 @@ interface WeatherBarChartProps {
   barName?: string;
   isAnomaly?: boolean;
   height?: number;
+  valueConverter?: (value: number | null | undefined) => number | null;
 }
 
 export const WeatherBarChart: React.FC<WeatherBarChartProps> = ({
@@ -31,6 +32,7 @@ export const WeatherBarChart: React.FC<WeatherBarChartProps> = ({
   barName = 'Value',
   isAnomaly = false,
   height = 280,
+  valueConverter,
 }) => {
   const { isDark } = useApp();
 
@@ -38,6 +40,10 @@ export const WeatherBarChart: React.FC<WeatherBarChartProps> = ({
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const tooltipBg = isDark ? '#1e293b' : '#ffffff';
   const tooltipBorder = isDark ? '#475569' : '#cbd5e1';
+  const convertedData = React.useMemo(() => {
+    if (!valueConverter) return data;
+    return data.map((item) => ({ ...item, [yKey]: valueConverter(item[yKey]) }));
+  }, [data, valueConverter, yKey]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -74,14 +80,14 @@ export const WeatherBarChart: React.FC<WeatherBarChartProps> = ({
   return (
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        <BarChart data={convertedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis dataKey={xKey} stroke={textColor} fontSize={11} tickLine={false} axisLine={{ stroke: gridColor }} />
           <YAxis stroke={textColor} fontSize={11} tickLine={false} axisLine={{ stroke: gridColor }} />
           <Tooltip content={<CustomTooltip />} />
           {isAnomaly && <ReferenceLine y={0} stroke={isDark ? '#94a3b8' : '#64748b'} strokeDasharray="3 3" />}
           <Bar dataKey={yKey} name={barName} radius={[4, 4, 0, 0]}>
-            {data.map((entry, index) => {
+            {convertedData.map((entry, index) => {
               const val = entry[yKey];
               let color = '#3b82f6';
               if (isAnomaly) {

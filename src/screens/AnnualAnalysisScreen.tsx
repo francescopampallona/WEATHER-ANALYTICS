@@ -5,8 +5,8 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { processAnnualAnalysis } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { AnnualSummaryData } from '../models/statistics';
-import { getCurrentYear } from '../utils/dates';
-import { formatTemp, formatPrecip } from '../utils/units';
+import { clampToMaxHistoricalDate, getCurrentYear } from '../utils/dates';
+import { convertTemp, formatTemp, formatPrecip } from '../utils/units';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { WeatherLineChart } from '../charts/WeatherLineChart';
@@ -33,7 +33,7 @@ export const AnnualAnalysisScreen: React.FC<AnnualAnalysisScreenProps> = ({ onBa
     setError(null);
     try {
       const startStr = `${startYear}-01-01`;
-      const endStr = `${endYear}-12-31`;
+      const endStr = clampToMaxHistoricalDate(`${endYear}-12-31`);
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
@@ -83,9 +83,9 @@ export const AnnualAnalysisScreen: React.FC<AnnualAnalysisScreenProps> = ({ onBa
       format: (val) => formatPrecip(val, settings.precipUnit),
       align: 'right',
     },
-    { key: 'daysAbove30', header: '>30°C Days', accessor: (d) => d.daysAbove30, align: 'right' },
-    { key: 'daysAbove35', header: '>35°C Days', accessor: (d) => d.daysAbove35, align: 'right' },
-    { key: 'daysBelow0', header: '<0°C Days', accessor: (d) => d.daysBelow0, align: 'right' },
+    { key: 'daysAbove30', header: `>${formatTemp(30, settings.tempUnit, 0)} Days`, accessor: (d) => d.daysAbove30, align: 'right' },
+    { key: 'daysAbove35', header: `>${formatTemp(35, settings.tempUnit, 0)} Days`, accessor: (d) => d.daysAbove35, align: 'right' },
+    { key: 'daysBelow0', header: `<${formatTemp(0, settings.tempUnit, 0)} Days`, accessor: (d) => d.daysBelow0, align: 'right' },
   ];
 
   return (
@@ -193,6 +193,7 @@ export const AnnualAnalysisScreen: React.FC<AnnualAnalysisScreenProps> = ({ onBa
                 lineName="Annual Mean"
                 showTrendline={false}
                 height={260}
+                valueConverter={(value) => convertTemp(value, settings.tempUnit)}
               />
             </div>
           ) : (

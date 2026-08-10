@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext';
 import { getHistoricalWeather } from '../services/weatherApi';
 import { processDecadeComparison } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
-import { getCurrentYear } from '../utils/dates';
-import { formatTemp, formatPrecip } from '../utils/units';
+import { clampToMaxHistoricalDate, getCurrentYear } from '../utils/dates';
+import { convertTemp, formatTemp, formatPrecip } from '../utils/units';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -26,7 +26,12 @@ export const DecadeComparisonScreen: React.FC<DecadeComparisonScreenProps> = ({ 
     setLoading(true);
     setError(null);
     try {
-      const data = await getHistoricalWeather(location, '1980-01-01', `${currentYear}-12-31`, forceRefresh);
+      const data = await getHistoricalWeather(
+        location,
+        '1980-01-01',
+        clampToMaxHistoricalDate(`${currentYear}-12-31`),
+        forceRefresh
+      );
       setRawHistory(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch decade data');
@@ -43,6 +48,16 @@ export const DecadeComparisonScreen: React.FC<DecadeComparisonScreenProps> = ({ 
     if (!rawHistory) return [];
     return processDecadeComparison(rawHistory.records);
   }, [rawHistory]);
+  const displayedDecades = useMemo(
+    () =>
+      decades.map((decade) => ({
+        ...decade,
+        tempMean: convertTemp(decade.tempMean, settings.tempUnit),
+        tempMinMean: convertTemp(decade.tempMinMean, settings.tempUnit),
+        tempMaxMean: convertTemp(decade.tempMaxMean, settings.tempUnit),
+      })),
+    [decades, settings.tempUnit]
+  );
 
   return (
     <div className="flex-1 space-y-6">
@@ -80,7 +95,7 @@ export const DecadeComparisonScreen: React.FC<DecadeComparisonScreenProps> = ({ 
             </div>
             <div className="w-full h-[280px] sm:h-[360px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={decades} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={displayedDecades} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis dataKey="decadeLabel" stroke="#94a3b8" fontSize={11} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
@@ -132,8 +147,8 @@ export const DecadeComparisonScreen: React.FC<DecadeComparisonScreenProps> = ({ 
                   </div>
 
                   <div className="flex items-center space-x-3 text-xs pt-1 border-t border-slate-100 dark:border-slate-700/40 text-amber-600 dark:text-amber-400">
-                    <span>Avg &gt;30°C days/yr: <strong>{dec.daysAbove30}</strong></span>
-                    <span>Avg &gt;35°C days/yr: <strong>{dec.daysAbove35}</strong></span>
+                    <span>Avg &gt;{formatTemp(30, settings.tempUnit, 0)} days/yr: <strong>{dec.daysAbove30}</strong></span>
+                    <span>Avg &gt;{formatTemp(35, settings.tempUnit, 0)} days/yr: <strong>{dec.daysAbove35}</strong></span>
                   </div>
                 </div>
               ))}

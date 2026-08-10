@@ -59,12 +59,34 @@ export function getCurrentYear(): number {
 }
 
 /**
+ * Formats a Date using its local calendar fields, avoiding UTC day shifts.
+ */
+export function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/**
  * Returns max available date for historical weather queries (yesterday)
  */
 export function getMaxHistoricalDate(): string {
   const today = new Date();
   today.setDate(today.getDate() - 1); // Yesterday
-  return today.toISOString().split('T')[0];
+  return formatLocalDate(today);
+}
+
+/**
+ * Ensures an Archive API end date never points past the available historical limit.
+ */
+export function clampToMaxHistoricalDate(dateStr: string): string {
+  const maxHistoricalDate = getMaxHistoricalDate();
+  return dateStr < maxHistoricalDate ? dateStr : maxHistoricalDate;
+}
+
+/**
+ * Returns the final calendar date for a month.
+ */
+export function getMonthEndDate(year: number, month: number): string {
+  return `${year}-${pad2(month)}-${pad2(getDaysInMonth(month, year))}`;
 }
 
 /**

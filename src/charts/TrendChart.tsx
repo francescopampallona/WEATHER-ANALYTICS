@@ -15,9 +15,17 @@ interface TrendChartProps {
   data: any[];
   unitLabel?: string;
   height?: number;
+  valueConverter?: (value: number | null | undefined) => number | null;
+  seriesLabel?: string;
 }
 
-export const TrendChart: React.FC<TrendChartProps> = ({ data, unitLabel = '°C', height = 300 }) => {
+export const TrendChart: React.FC<TrendChartProps> = ({
+  data,
+  unitLabel = '°C',
+  height = 300,
+  valueConverter,
+  seriesLabel = 'Annual Mean',
+}) => {
   const { isDark } = useApp();
   const [showRaw, setShowRaw] = useState(true);
   const [showMA5, setShowMA5] = useState(true);
@@ -28,6 +36,16 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data, unitLabel = '°C',
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const tooltipBg = isDark ? '#1e293b' : '#ffffff';
   const tooltipBorder = isDark ? '#475569' : '#cbd5e1';
+  const convertedData = React.useMemo(() => {
+    if (!valueConverter) return data;
+    return data.map((item) => ({
+      ...item,
+      value: valueConverter(item.value),
+      ma5: valueConverter(item.ma5),
+      ma10: valueConverter(item.ma10),
+      trendLine: valueConverter(item.trendLine),
+    }));
+  }, [data, valueConverter]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -70,7 +88,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data, unitLabel = '°C',
               : 'text-slate-400 border-slate-200 dark:border-slate-700'
           }`}
         >
-          Annual Mean
+          {seriesLabel}
         </button>
         <button
           onClick={() => setShowMA5(!showMA5)}
@@ -106,7 +124,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data, unitLabel = '°C',
 
       <div className="w-full" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <LineChart data={convertedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
             <XAxis dataKey="year" stroke={textColor} fontSize={11} tickLine={false} axisLine={{ stroke: gridColor }} />
             <YAxis stroke={textColor} fontSize={11} tickLine={false} axisLine={{ stroke: gridColor }} />
@@ -117,7 +135,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data, unitLabel = '°C',
               <Line
                 type="monotone"
                 dataKey="value"
-                name="Annual Mean"
+                name={seriesLabel}
                 stroke="#f59e0b"
                 strokeWidth={1.5}
                 dot={{ r: 2, fill: '#f59e0b' }}

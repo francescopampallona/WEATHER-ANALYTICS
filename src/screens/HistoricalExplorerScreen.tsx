@@ -5,7 +5,14 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { HistoricalDataResult, DailyWeatherRecord } from '../models/weather';
 import { ActiveMetric } from '../models/statistics';
 import { mean, median, min, max, standardDeviation } from '../utils/statistics';
-import { formatTemp, formatWind, formatPrecip, getMetricUnitLabel } from '../utils/units';
+import {
+  convertMetricValue,
+  formatMetricValue,
+  formatTemp,
+  formatWind,
+  formatPrecip,
+  getMetricUnitLabel,
+} from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { MetricSelector } from '../components/MetricSelector';
 import { LoadingState } from '../components/LoadingState';
@@ -52,6 +59,13 @@ export const HistoricalExplorerScreen: React.FC<HistoricalExplorerScreenProps> =
     settings.windUnit,
     settings.precipUnit
   );
+  const metricLabel: Record<ActiveMetric, string> = {
+    tempMean: 'Mean Temp',
+    tempMin: 'Min Temp',
+    tempMax: 'Max Temp',
+    precipitation: 'Precipitation',
+    windSpeedMax: 'Max Wind',
+  };
 
   const records = rawHistory?.records || [];
 
@@ -213,12 +227,13 @@ export const HistoricalExplorerScreen: React.FC<HistoricalExplorerScreenProps> =
                 data={records}
                 xKey="date"
                 yKey={activeMetric}
-                yKeyMin="tempMin"
-                yKeyMax="tempMax"
+                yKeyMin={activeMetric === 'tempMean' ? 'tempMin' : undefined}
+                yKeyMax={activeMetric === 'tempMean' ? 'tempMax' : undefined}
                 unitLabel={unitLabel}
-                lineName="Mean Temp"
+                lineName={metricLabel[activeMetric]}
                 showTrendline={false}
                 height={260}
+                valueConverter={(value) => convertMetricValue(value, activeMetric, settings)}
               />
             </div>
           ) : (
@@ -235,24 +250,24 @@ export const HistoricalExplorerScreen: React.FC<HistoricalExplorerScreenProps> =
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <MetricCard
                 title="Average"
-                value={formatTemp(stats.mean, settings.tempUnit)}
+                value={formatMetricValue(stats.mean, activeMetric, settings)}
                 badge="Mean"
                 badgeColor="blue"
               />
               <MetricCard
                 title="Median"
-                value={formatTemp(stats.median, settings.tempUnit)}
+                value={formatMetricValue(stats.median, activeMetric, settings)}
                 badge="Median"
                 badgeColor="slate"
               />
               <MetricCard
                 title="Minimum"
-                value={formatTemp(stats.min, settings.tempUnit)}
+                value={formatMetricValue(stats.min, activeMetric, settings)}
                 badgeColor="blue"
               />
               <MetricCard
                 title="Maximum"
-                value={formatTemp(stats.max, settings.tempUnit)}
+                value={formatMetricValue(stats.max, activeMetric, settings)}
                 badgeColor="rose"
               />
             </div>

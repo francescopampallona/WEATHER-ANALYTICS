@@ -6,8 +6,15 @@ import { DEFAULT_LOCATION, searchLocations } from '../services/geocodingApi';
 import { getHistoricalWeather } from '../services/weatherApi';
 import { HistoricalDataResult } from '../models/weather';
 import { processAnnualAnalysis, processMonthlyAnalysis, processSameDayThroughYears } from '../services/weatherStatistics';
-import { MONTH_NAMES, getCurrentYear, pad2 } from '../utils/dates';
-import { formatTemp } from '../utils/units';
+import {
+  MONTH_NAMES,
+  clampToMaxHistoricalDate,
+  getCurrentYear,
+  getDaysInMonth,
+  getMonthEndDate,
+  pad2,
+} from '../utils/dates';
+import { convertTemp } from '../utils/units';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -43,9 +50,15 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
   const [history2, setHistory2] = useState<HistoricalDataResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const selectableDays = getDaysInMonth(month, 2024);
+
+  useEffect(() => {
+    if (day > selectableDays) setDay(selectableDays);
+  }, [day, selectableDays]);
 
   // Search location 2 handling
   useEffect(() => {
+    let cancelled = false;
     if (!searchQueryLoc2.trim() || searchQueryLoc2.trim().length < 2) {
       setSearchResultsLoc2([]);
       return;
@@ -53,10 +66,13 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
     const timer = setTimeout(async () => {
       try {
         const res = await searchLocations(searchQueryLoc2);
-        setSearchResultsLoc2(res);
+        if (!cancelled) setSearchResultsLoc2(res);
       } catch (e) {}
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [searchQueryLoc2]);
 
   const fetchComparisonData = async (forceRefresh: boolean = false) => {
@@ -64,11 +80,15 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
     setError(null);
     try {
       let startStr = `${startYear}-01-01`;
-      let endStr = `${endYear}-12-31`;
+      let endStr = clampToMaxHistoricalDate(`${endYear}-12-31`);
 
       if (compareMode === 'sameday' || compareMode === 'monthly') {
         startStr = `${startYear}-${pad2(month)}-01`;
-        endStr = `${endYear}-${pad2(month)}-${month === 2 ? '28' : [4, 6, 9, 11].includes(month) ? '30' : '31'}`;
+        endStr = clampToMaxHistoricalDate(getMonthEndDate(endYear, month));
+      }
+
+      if (startStr > endStr) {
+        throw new Error('No historical data is available yet for the selected period.');
       }
 
       const [res1, res2] = await Promise.all([
@@ -87,7 +107,7 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
 
   useEffect(() => {
     fetchComparisonData(false);
-  }, [loc1, loc2, compareMode, month, day, startYear, endYear]);
+  }, [loc1, loc2, compareMode, month, startYear, endYear]);
 
   // Comparative data processing
   const chartData = useMemo(() => {
@@ -148,6 +168,19 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
       };
     });
   }, [history1, history2, compareMode, month, day]);
+  const displayedChartData = useMemo(
+    () =>
+      chartData.map((item) => ({
+        ...item,
+        loc1Val: convertTemp(item.loc1Val, settings.tempUnit),
+        loc2Val: convertTemp(item.loc2Val, settings.tempUnit),
+        difference:
+          item.difference === null
+            ? null
+            : item.difference * (settings.tempUnit === 'F' ? 1.8 : 1),
+      })),
+    [chartData, settings.tempUnit]
+  );
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -313,7 +346,7 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
                 onChange={(e) => setDay(parseInt(e.target.value, 10))}
                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 text-slate-900 dark:text-white"
               >
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                {Array.from({ length: selectableDays }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -367,7 +400,7 @@ export const CompareScreen: React.FC<CompareScreenProps> = ({ onOpenSearch }) =>
 
             <div className="w-full h-[300px] sm:h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <LineChart data={displayedChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />

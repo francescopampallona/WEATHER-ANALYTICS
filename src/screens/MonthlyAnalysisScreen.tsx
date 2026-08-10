@@ -5,8 +5,8 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { processMonthlyAnalysis } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { MonthlySummaryData } from '../models/statistics';
-import { MONTH_NAMES, getCurrentYear, pad2 } from '../utils/dates';
-import { formatTemp, formatPrecip } from '../utils/units';
+import { MONTH_NAMES, clampToMaxHistoricalDate, getCurrentYear, getMonthEndDate, pad2 } from '../utils/dates';
+import { convertTemp, formatTemp, formatPrecip } from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
@@ -35,7 +35,10 @@ export const MonthlyAnalysisScreen: React.FC<MonthlyAnalysisScreenProps> = ({ on
     setError(null);
     try {
       const startStr = `${startYear}-${pad2(month)}-01`;
-      const endStr = `${endYear}-${pad2(month)}-${month === 2 ? '28' : [4, 6, 9, 11].includes(month) ? '30' : '31'}`;
+      const endStr = clampToMaxHistoricalDate(getMonthEndDate(endYear, month));
+      if (startStr > endStr) {
+        throw new Error('No historical data is available yet for the selected month and year range.');
+      }
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
@@ -215,6 +218,7 @@ export const MonthlyAnalysisScreen: React.FC<MonthlyAnalysisScreenProps> = ({ on
                 lineName="Monthly Mean"
                 showTrendline={false}
                 height={260}
+                valueConverter={(value) => convertTemp(value, settings.tempUnit)}
               />
             </div>
           ) : (

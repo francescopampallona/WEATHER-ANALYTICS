@@ -41,8 +41,14 @@ export const RecordsScreen: React.FC = () => {
 
   const recordItems = useMemo(() => {
     if (!rawHistory) return [];
-    return processWeatherRecords(rawHistory.records, startYear, endYear);
-  }, [rawHistory, startYear, endYear]);
+    return processWeatherRecords(
+      rawHistory.records,
+      startYear,
+      endYear,
+      settings.tempUnit,
+      settings.precipUnit
+    );
+  }, [rawHistory, startYear, endYear, settings.tempUnit, settings.precipUnit]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {

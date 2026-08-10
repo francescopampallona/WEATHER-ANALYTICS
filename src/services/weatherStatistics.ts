@@ -1,4 +1,4 @@
-import { DailyWeatherRecord } from '../models/weather';
+import { DailyWeatherRecord, PrecipUnit, TempUnit } from '../models/weather';
 import {
   SameDayYearData,
   StatisticalSummary,
@@ -26,6 +26,7 @@ import {
   trendPerDecade,
 } from '../utils/statistics';
 import { isLeapYear, MONTH_NAMES } from '../utils/dates';
+import { formatPrecip, formatTemp } from '../utils/units';
 
 /**
  * Extracts value of active metric from a daily record
@@ -159,7 +160,8 @@ export function processSameDayThroughYears(
  */
 export function processMonthlyAnalysis(
   records: DailyWeatherRecord[],
-  month: number
+  month: number,
+  includeIncomplete: boolean = false
 ): MonthlySummaryData[] {
   // Group records by year
   const yearMap = new Map<number, DailyWeatherRecord[]>();
@@ -175,6 +177,14 @@ export function processMonthlyAnalysis(
 
   years.forEach((yr) => {
     const recs = yearMap.get(yr)!;
+    const expectedDays = month === 2 ? (isLeapYear(yr) ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31;
+    const uniqueDates = new Set(recs.map((record) => record.date));
+    const monthStart = `${yr}-${String(month).padStart(2, '0')}-01`;
+    const monthEnd = `${yr}-${String(month).padStart(2, '0')}-${expectedDays}`;
+    const isComplete =
+      uniqueDates.size >= expectedDays && uniqueDates.has(monthStart) && uniqueDates.has(monthEnd);
+    if (!includeIncomplete && !isComplete) return;
+
     const tempMeans = recs.map((r) => r.tempMean);
     const tempMins = recs.map((r) => r.tempMin);
     const tempMaxs = recs.map((r) => r.tempMax);
@@ -185,7 +195,8 @@ export function processMonthlyAnalysis(
     const tempMaxMeanVal = mean(tempMaxs);
 
     const validPrecips = precips.filter((p): p is number => p !== null && p !== undefined);
-    const precipTotalVal = validPrecips.reduce((sum, p) => sum + p, 0);
+    const precipTotalVal =
+      validPrecips.length > 0 ? validPrecips.reduce((sum, p) => sum + p, 0) : null;
     const rainyDaysCount = validPrecips.filter((p) => p >= 0.1).length;
 
     let tempMaxAbs: number | null = null;
@@ -323,7 +334,10 @@ export function processSeasonalAnalysis(
 /**
  * Annual Analysis Processor
  */
-export function processAnnualAnalysis(records: DailyWeatherRecord[]): AnnualSummaryData[] {
+export function processAnnualAnalysis(
+  records: DailyWeatherRecord[],
+  includeIncomplete: boolean = false
+): AnnualSummaryData[] {
   const yearMap = new Map<number, DailyWeatherRecord[]>();
   records.forEach((r) => {
     if (!yearMap.has(r.year)) yearMap.set(r.year, []);
@@ -335,6 +349,14 @@ export function processAnnualAnalysis(records: DailyWeatherRecord[]): AnnualSumm
 
   years.forEach((yr) => {
     const recs = yearMap.get(yr)!;
+    const expectedDays = isLeapYear(yr) ? 366 : 365;
+    const uniqueDates = new Set(recs.map((record) => record.date));
+    const isComplete =
+      uniqueDates.size >= expectedDays &&
+      uniqueDates.has(`${yr}-01-01`) &&
+      uniqueDates.has(`${yr}-12-31`);
+    if (!includeIncomplete && !isComplete) return;
+
     const tempMeans = recs.map((r) => r.tempMean);
     const tempMins = recs.map((r) => r.tempMin);
     const tempMaxs = recs.map((r) => r.tempMax);
@@ -345,7 +367,8 @@ export function processAnnualAnalysis(records: DailyWeatherRecord[]): AnnualSumm
     const tempMaxMeanVal = mean(tempMaxs);
 
     const validPrecips = precips.filter((p): p is number => p !== null && p !== undefined);
-    const precipTotalVal = validPrecips.reduce((sum, p) => sum + p, 0);
+    const precipTotalVal =
+      validPrecips.length > 0 ? validPrecips.reduce((sum, p) => sum + p, 0) : null;
     const precipDaysCount = validPrecips.filter((p) => p >= 0.1).length;
 
     let hottest: { date: string; temp: number } | undefined;
@@ -388,7 +411,9 @@ export function processAnnualAnalysis(records: DailyWeatherRecord[]): AnnualSumm
 export function processWeatherRecords(
   records: DailyWeatherRecord[],
   startYear: number,
-  endYear: number
+  endYear: number,
+  tempUnit: TempUnit = 'C',
+  precipUnit: PrecipUnit = 'mm'
 ): WeatherRecordItem[] {
   if (records.length === 0) return [];
 
@@ -478,7 +503,7 @@ export function processWeatherRecords(
     items.push({
       id: 'highest_temp',
       title: 'Highest Temperature',
-      value: `${(highestTemp as { temp: number; date: string }).temp.toFixed(1)} °C`,
+      value: formatTemp((highestTemp as { temp: number; date: string }).temp, tempUnit),
       subtext: `Recorded on ${(highestTemp as { temp: number; date: string }).date}`,
       category: 'temperature',
     });
@@ -488,7 +513,7 @@ export function processWeatherRecords(
     items.push({
       id: 'lowest_temp',
       title: 'Lowest Temperature',
-      value: `${(lowestTemp as { temp: number; date: string }).temp.toFixed(1)} °C`,
+      value: formatTemp((lowestTemp as { temp: number; date: string }).temp, tempUnit),
       subtext: `Recorded on ${(lowestTemp as { temp: number; date: string }).date}`,
       category: 'temperature',
     });
@@ -498,7 +523,7 @@ export function processWeatherRecords(
     items.push({
       id: 'wettest_day',
       title: 'Wettest Day',
-      value: `${(wettestDay as { precip: number; date: string }).precip.toFixed(1)} mm`,
+      value: formatPrecip((wettestDay as { precip: number; date: string }).precip, precipUnit),
       subtext: `Recorded on ${(wettestDay as { precip: number; date: string }).date}`,
       category: 'precipitation',
     });
@@ -509,7 +534,7 @@ export function processWeatherRecords(
     items.push({
       id: 'wettest_month',
       title: 'Wettest Month',
-      value: `${wm.total.toFixed(1)} mm`,
+      value: formatPrecip(wm.total, precipUnit),
       subtext: `${MONTH_NAMES[wm.month - 1]} ${wm.year}`,
       category: 'precipitation',
     });
@@ -520,7 +545,7 @@ export function processWeatherRecords(
     items.push({
       id: 'warmest_year',
       title: 'Warmest Year',
-      value: `${wy.temp.toFixed(1)} °C avg`,
+      value: `${formatTemp(wy.temp, tempUnit)} avg`,
       subtext: `Year ${wy.year}`,
       category: 'temperature',
     });
@@ -531,7 +556,7 @@ export function processWeatherRecords(
     items.push({
       id: 'coldest_year',
       title: 'Coldest Year',
-      value: `${cy.temp.toFixed(1)} °C avg`,
+      value: `${formatTemp(cy.temp, tempUnit)} avg`,
       subtext: `Year ${cy.year}`,
       category: 'temperature',
     });
@@ -542,7 +567,7 @@ export function processWeatherRecords(
     items.push({
       id: 'warmest_month',
       title: 'Warmest Month',
-      value: `${wm.temp.toFixed(1)} °C avg`,
+      value: `${formatTemp(wm.temp, tempUnit)} avg`,
       subtext: `${MONTH_NAMES[wm.month - 1]} ${wm.year}`,
       category: 'temperature',
     });
@@ -553,7 +578,7 @@ export function processWeatherRecords(
     items.push({
       id: 'coldest_month',
       title: 'Coldest Month',
-      value: `${cm.temp.toFixed(1)} °C avg`,
+      value: `${formatTemp(cm.temp, tempUnit)} avg`,
       subtext: `${MONTH_NAMES[cm.month - 1]} ${cm.year}`,
       category: 'temperature',
     });
@@ -571,7 +596,7 @@ export function processWeatherRecords(
     const md = mostDays30 as { year: number; count: number };
     items.push({
       id: 'most_days_30',
-      title: 'Most Days Above 30 °C',
+      title: `Most Days Above ${formatTemp(30, tempUnit, 0)}`,
       value: `${md.count} days`,
       subtext: `In year ${md.year}`,
       category: 'counts',
@@ -582,7 +607,7 @@ export function processWeatherRecords(
     const md = mostDays35 as { year: number; count: number };
     items.push({
       id: 'most_days_35',
-      title: 'Most Days Above 35 °C',
+      title: `Most Days Above ${formatTemp(35, tempUnit, 0)}`,
       value: `${md.count} days`,
       subtext: `In year ${md.year}`,
       category: 'counts',
@@ -679,20 +704,22 @@ export function processAnomalies(
     return { baselineMean: null, anomalies: [] };
   }
 
-  const anomalies: AnomalyData[] = annuals.map((a) => {
+  const anomalies: AnomalyData[] = annuals.flatMap((a) => {
     let val: number | null = null;
     if (metric === 'tempMean') val = a.tempMean;
     else if (metric === 'tempMin') val = a.tempMinMean;
     else if (metric === 'tempMax') val = a.tempMaxMean;
     else if (metric === 'precipitation') val = a.precipTotal;
 
-    const actualVal = val ?? baseMean;
-    return {
-      year: a.year,
-      value: actualVal,
-      baselineMean: baseMean,
-      anomaly: actualVal - baseMean,
-    };
+    if (val === null) return [];
+    return [
+      {
+        year: a.year,
+        value: val,
+        baselineMean: baseMean,
+        anomaly: val - baseMean,
+      },
+    ];
   });
 
   return {

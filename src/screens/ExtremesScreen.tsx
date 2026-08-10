@@ -4,9 +4,10 @@ import { useApp } from '../context/AppContext';
 import { getHistoricalWeather } from '../services/weatherApi';
 import { processAnnualAnalysis } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
-import { getCurrentYear } from '../utils/dates';
+import { clampToMaxHistoricalDate, getCurrentYear } from '../utils/dates';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
+import { formatTemp } from '../utils/units';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 interface ExtremesScreenProps {
@@ -14,7 +15,7 @@ interface ExtremesScreenProps {
 }
 
 export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
-  const { location } = useApp();
+  const { location, settings } = useApp();
   const currentYear = getCurrentYear();
 
   const [startYear, setStartYear] = useState<number>(1985);
@@ -30,7 +31,7 @@ export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
     setError(null);
     try {
       const startStr = `${startYear}-01-01`;
-      const endStr = `${endYear}-12-31`;
+      const endStr = clampToMaxHistoricalDate(`${endYear}-12-31`);
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
@@ -67,11 +68,11 @@ export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
   const getLabel = () => {
     switch (thresholdType) {
       case 'heat35':
-        return 'Days with Max Temp > 35 °C';
+        return `Days with Max Temp > ${formatTemp(35, settings.tempUnit, 0)}`;
       case 'heat30':
-        return 'Days with Max Temp > 30 °C';
+        return `Days with Max Temp > ${formatTemp(30, settings.tempUnit, 0)}`;
       case 'frost':
-        return 'Frost Days (Min Temp < 0 °C)';
+        return `Frost Days (Min Temp < ${formatTemp(0, settings.tempUnit, 0)})`;
       case 'heavyRain':
         return 'Days with Rain ≥ 0.1 mm';
     }
@@ -114,7 +115,7 @@ export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
               thresholdType === 'heat35' ? 'bg-white dark:bg-slate-800 text-rose-600 font-bold shadow-2xs' : 'text-slate-500'
             }`}
           >
-            &gt; 35 °C Heat
+            &gt; {formatTemp(35, settings.tempUnit, 0)} Heat
           </button>
           <button
             onClick={() => setThresholdType('heat30')}
@@ -122,7 +123,7 @@ export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
               thresholdType === 'heat30' ? 'bg-white dark:bg-slate-800 text-amber-600 font-bold shadow-2xs' : 'text-slate-500'
             }`}
           >
-            &gt; 30 °C Warm
+            &gt; {formatTemp(30, settings.tempUnit, 0)} Warm
           </button>
           <button
             onClick={() => setThresholdType('frost')}
@@ -130,7 +131,7 @@ export const ExtremesScreen: React.FC<ExtremesScreenProps> = ({ onBack }) => {
               thresholdType === 'frost' ? 'bg-white dark:bg-slate-800 text-blue-600 font-bold shadow-2xs' : 'text-slate-500'
             }`}
           >
-            &lt; 0 °C Frost
+            &lt; {formatTemp(0, settings.tempUnit, 0)} Frost
           </button>
           <button
             onClick={() => setThresholdType('heavyRain')}

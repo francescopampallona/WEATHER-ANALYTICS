@@ -5,8 +5,12 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { processAnomalies } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { ActiveMetric } from '../models/statistics';
-import { getCurrentYear } from '../utils/dates';
-import { formatTemp } from '../utils/units';
+import { clampToMaxHistoricalDate, getCurrentYear } from '../utils/dates';
+import {
+  convertMetricDelta,
+  formatMetricValue,
+  getMetricUnitLabel,
+} from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { MetricSelector } from '../components/MetricSelector';
 import { LoadingState } from '../components/LoadingState';
@@ -36,7 +40,7 @@ export const AnomaliesScreen: React.FC<AnomaliesScreenProps> = ({ onBack }) => {
     setError(null);
     try {
       const startStr = `${startYear}-01-01`;
-      const endStr = `${endYear}-12-31`;
+      const endStr = clampToMaxHistoricalDate(`${endYear}-12-31`);
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
@@ -55,6 +59,12 @@ export const AnomaliesScreen: React.FC<AnomaliesScreenProps> = ({ onBack }) => {
     if (!rawHistory) return null;
     return processAnomalies(rawHistory.records, baselineStart, baselineEnd, activeMetric);
   }, [rawHistory, baselineStart, baselineEnd, activeMetric]);
+  const unitLabel = getMetricUnitLabel(
+    activeMetric,
+    settings.tempUnit,
+    settings.windUnit,
+    settings.precipUnit
+  );
 
   return (
     <div className="flex-1 space-y-6">
@@ -125,7 +135,7 @@ export const AnomaliesScreen: React.FC<AnomaliesScreenProps> = ({ onBack }) => {
           {anomalyResult.baselineMean !== null && (
             <MetricCard
               title="Calculated Baseline Average"
-              value={formatTemp(anomalyResult.baselineMean, settings.tempUnit)}
+              value={formatMetricValue(anomalyResult.baselineMean, activeMetric, settings)}
               subtext={`Derived from Open-Meteo ${baselineStart}–${baselineEnd} records`}
               badge="Baseline Mean"
               badgeColor="emerald"
@@ -137,10 +147,11 @@ export const AnomaliesScreen: React.FC<AnomaliesScreenProps> = ({ onBack }) => {
               data={anomalyResult.anomalies}
               xKey="year"
               yKey="anomaly"
-              unitLabel={`°${settings.tempUnit}`}
+              unitLabel={unitLabel}
               barName="Anomaly"
               isAnomaly={true}
               height={270}
+              valueConverter={(value) => convertMetricDelta(value, activeMetric, settings)}
             />
           </div>
         </div>

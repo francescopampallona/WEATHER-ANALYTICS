@@ -17,6 +17,7 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     if (!query.trim() || query.trim().length < 2) {
       setResults([]);
       setLoading(false);
@@ -29,15 +30,18 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen
       setError(null);
       try {
         const locs = await searchLocations(query);
-        setResults(locs);
+        if (!cancelled) setResults(locs);
       } catch (err: any) {
-        setError(err.message || 'Location search failed');
+        if (!cancelled) setError(err.message || 'Location search failed');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   if (!isOpen) return null;

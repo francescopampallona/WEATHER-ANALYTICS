@@ -23,6 +23,7 @@ interface WeatherLineChartProps {
   lineName?: string;
   showTrendline?: boolean;
   height?: number | string;
+  valueConverter?: (value: number | null | undefined) => number | null;
 }
 
 export const WeatherLineChart: React.FC<WeatherLineChartProps> = ({
@@ -36,6 +37,7 @@ export const WeatherLineChart: React.FC<WeatherLineChartProps> = ({
   lineName = 'Temperature',
   showTrendline = true,
   height,
+  valueConverter,
 }) => {
   const { isDark } = useApp();
 
@@ -43,6 +45,17 @@ export const WeatherLineChart: React.FC<WeatherLineChartProps> = ({
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const tooltipBg = isDark ? '#1e293b' : '#ffffff';
   const tooltipBorder = isDark ? '#475569' : '#cbd5e1';
+  const convertedData = React.useMemo(() => {
+    if (!valueConverter) return data;
+    const keys = [yKey, yKeyMin, yKeyMax, trendKey].filter((key): key is string => Boolean(key));
+    return data.map((item) => {
+      const converted = { ...item };
+      keys.forEach((key) => {
+        converted[key] = valueConverter(item[key]);
+      });
+      return converted;
+    });
+  }, [data, trendKey, valueConverter, yKey, yKeyMax, yKeyMin]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -79,7 +92,7 @@ export const WeatherLineChart: React.FC<WeatherLineChartProps> = ({
       style={typeof height === 'number' ? { height } : undefined}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        <LineChart data={convertedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis
             dataKey={xKey}

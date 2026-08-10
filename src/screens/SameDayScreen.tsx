@@ -5,8 +5,23 @@ import { getHistoricalWeather } from '../services/weatherApi';
 import { processSameDayThroughYears } from '../services/weatherStatistics';
 import { HistoricalDataResult } from '../models/weather';
 import { ActiveMetric, SameDayYearData } from '../models/statistics';
-import { MONTH_NAMES, getCurrentYear, pad2 } from '../utils/dates';
-import { formatTemp, formatWind, formatPrecip, getMetricUnitLabel } from '../utils/units';
+import {
+  MONTH_NAMES,
+  clampToMaxHistoricalDate,
+  getCurrentYear,
+  getDaysInMonth,
+  getMonthEndDate,
+  pad2,
+} from '../utils/dates';
+import {
+  convertMetricDelta,
+  convertMetricValue,
+  formatMetricValue,
+  formatTemp,
+  formatWind,
+  formatPrecip,
+  getMetricUnitLabel,
+} from '../utils/units';
 import { MetricCard } from '../components/MetricCard';
 import { MetricSelector } from '../components/MetricSelector';
 import { LoadingState } from '../components/LoadingState';
@@ -40,9 +55,10 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
     setError(null);
     try {
       const startStr = `${startYear}-${pad2(month)}-01`;
-      // Ensure end date doesn't exceed current year limit
-      const endMonth = pad2(month);
-      const endStr = `${endYear}-${endMonth}-${pad2(day > 28 ? 28 : day)}`;
+      const endStr = clampToMaxHistoricalDate(getMonthEndDate(endYear, month));
+      if (startStr > endStr) {
+        throw new Error('No historical data is available yet for the selected month and year range.');
+      }
 
       const data = await getHistoricalWeather(location, startStr, endStr, forceRefresh);
       setRawHistory(data);
@@ -57,6 +73,11 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
     fetchData(false);
   }, [location, startYear, endYear, month]);
 
+  const selectableDays = getDaysInMonth(month, 2024);
+  useEffect(() => {
+    if (day > selectableDays) setDay(selectableDays);
+  }, [day, selectableDays]);
+
   // Process data for selected day across years
   const processed = useMemo(() => {
     if (!rawHistory) return null;
@@ -69,6 +90,24 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
     settings.windUnit,
     settings.precipUnit
   );
+  const convertedTrend = convertMetricDelta(
+    processed?.summary.trendPerDecade,
+    activeMetric,
+    settings
+  );
+  const convertedStdDev = convertMetricDelta(processed?.summary.stdDev, activeMetric, settings);
+  const highTitle =
+    activeMetric === 'precipitation'
+      ? 'Wettest Year'
+      : activeMetric === 'windSpeedMax'
+        ? 'Windiest Year'
+        : 'Warmest Year';
+  const lowTitle =
+    activeMetric === 'precipitation'
+      ? 'Driest Year'
+      : activeMetric === 'windSpeedMax'
+        ? 'Calmest Year'
+        : 'Coldest Year';
 
   const columns: ColumnDef<SameDayYearData>[] = [
     { key: 'year', header: 'Year', accessor: (d) => d.year },
@@ -162,7 +201,7 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
               onChange={(e) => setDay(parseInt(e.target.value, 10))}
               className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-white font-medium"
             >
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+              {Array.from({ length: selectableDays }, (_, i) => i + 1).map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
@@ -221,7 +260,7 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
 
       {/* Main Content View */}
       {loading ? (
-        <LoadingState message={`Retrieving ${day} ${MONTH_NAMES[month - 1]} weather from 1985 to ${endYear}...`} />
+        <LoadingState message={`Retrieving ${day} ${MONTH_NAMES[month - 1]} weather from ${startYear} to ${endYear}...`} />
       ) : error ? (
         <ErrorState message={error} onRetry={() => fetchData(true)} />
       ) : processed ? (
@@ -263,10 +302,10 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   {day} {MONTH_NAMES[month - 1]} ({processed.data.length} Years)
                 </span>
-                {processed.summary.trendPerDecade !== undefined && (
+                {convertedTrend !== null && (
                   <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 font-mono">
-                    Trend: {processed.summary.trendPerDecade > 0 ? '+' : ''}
-                    {processed.summary.trendPerDecade.toFixed(2)} {unitLabel} / decade
+                    Trend: {convertedTrend > 0 ? '+' : ''}
+                    {convertedTrend.toFixed(2)} {unitLabel} / decade
                   </span>
                 )}
               </div>
@@ -278,6 +317,7 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
                 unitLabel={unitLabel}
                 lineName={`${day} ${MONTH_NAMES[month - 1]}`}
                 height={260}
+                valueConverter={(value) => convertMetricValue(value, activeMetric, settings)}
               />
             </div>
           ) : (
@@ -300,21 +340,21 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MetricCard
                 title="Period Average"
-                value={formatTemp(processed.summary.mean, settings.tempUnit)}
+                value={formatMetricValue(processed.summary.mean, activeMetric, settings)}
                 badge="Mean"
                 badgeColor="blue"
               />
               <MetricCard
                 title="Period Median"
-                value={formatTemp(processed.summary.median, settings.tempUnit)}
+                value={formatMetricValue(processed.summary.median, activeMetric, settings)}
                 badge="Median"
                 badgeColor="slate"
               />
               <MetricCard
-                title="Warmest Year"
+                title={highTitle}
                 value={
                   processed.summary.warmestYear
-                    ? formatTemp(processed.summary.warmestYear.value, settings.tempUnit)
+                    ? formatMetricValue(processed.summary.warmestYear.value, activeMetric, settings)
                     : 'N/A'
                 }
                 subtext={
@@ -323,10 +363,10 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
                 badgeColor="rose"
               />
               <MetricCard
-                title="Coldest Year"
+                title={lowTitle}
                 value={
                   processed.summary.coldestYear
-                    ? formatTemp(processed.summary.coldestYear.value, settings.tempUnit)
+                    ? formatMetricValue(processed.summary.coldestYear.value, activeMetric, settings)
                     : 'N/A'
                 }
                 subtext={
@@ -337,8 +377,8 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
               <MetricCard
                 title="Std Deviation"
                 value={
-                  processed.summary.stdDev !== null
-                    ? `±${processed.summary.stdDev.toFixed(2)}`
+                  convertedStdDev !== null
+                    ? `±${Math.abs(convertedStdDev).toFixed(2)} ${unitLabel}`
                     : 'N/A'
                 }
                 subtext="Variance spread"
@@ -347,8 +387,8 @@ export const SameDayScreen: React.FC<SameDayScreenProps> = ({ onBack }) => {
               <MetricCard
                 title="Linear Trend"
                 value={
-                  processed.summary.trendPerDecade !== undefined && processed.summary.trendPerDecade !== null
-                    ? `${processed.summary.trendPerDecade > 0 ? '+' : ''}${processed.summary.trendPerDecade.toFixed(2)}`
+                  convertedTrend !== null
+                    ? `${convertedTrend > 0 ? '+' : ''}${convertedTrend.toFixed(2)}`
                     : 'N/A'
                 }
                 subtext={`${unitLabel} per decade`}
